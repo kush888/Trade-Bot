@@ -34,16 +34,28 @@ class Environment(Process):
             if self.env_idx == 0:
                 self.env.render(self.visualize)
             state, reward, done = self.env.step(action)
-
+            diff_in_return = 0
             if done or self.env.current_step == self.env.end_step:
+                start_price = self.env.start_price
+                end_step = self.env.end_price
                 net_worth = self.env.net_worth
                 episode_orders = self.env.episode_orders
                 state = self.env.reset(env_steps_size = self.training_batch_size)
                 reset = 1
+                diff_in_return = (net_worth-1000)/10 - ((end_step - start_price)/start_price)*100
 
-            self.child_conn.send([state, reward, done, reset, net_worth, episode_orders])
+            self.child_conn.send([state, reward, done, reset, net_worth, episode_orders, diff_in_return])
 
-def train_multiprocessing(CustomEnv, agent, train_df, train_df_nomalized, num_worker=4, training_batch_size=500, visualize=False, EPISODES=10000):
+def train_multiprocessing(CustomEnv, agent, train_df, train_df_nomalized, num_worker=4, training_batch_size=500, visualize=False, EPISODES=10000, folder="", name=""):
+
+    if name != "":
+        with open(folder+"/Parameters.json", "r") as json_file:
+            params = json.load(json_file)
+        params["Actor name"] = f"{name}_Actor.h5"
+        params["Critic name"] = f"{name}_Critic.h5"
+        name = params["Actor name"][:-9]
+        agent.load(folder, name)
+
     works, parent_conns, child_conns = [], [], []
     episode = 0
     total_average = deque(maxlen=100) # save recent 100 episodes net worth
@@ -84,7 +96,7 @@ def train_multiprocessing(CustomEnv, agent, train_df, train_df_nomalized, num_wo
             predictions[worker_id].append(predictions_list[worker_id])
 
         for worker_id, parent_conn in enumerate(parent_conns):
-            next_state, reward, done, reset, net_worth, episode_orders = parent_conn.recv()
+            next_state, reward, done, reset, net_worth, episode_orders, diff_in_return = parent_conn.recv()
             states[worker_id].append(np.expand_dims(state[worker_id], axis=0))
             next_states[worker_id].append(np.expand_dims(next_state, axis=0))
             rewards[worker_id].append(reward)
@@ -99,9 +111,10 @@ def train_multiprocessing(CustomEnv, agent, train_df, train_df_nomalized, num_wo
 
                 agent.writer.add_scalar('Data/average net_worth', average, episode)
                 agent.writer.add_scalar('Data/episode_orders', episode_orders, episode)
+                agent.writer.add_scalar('Data/diff in return', diff_in_return, episode)
                 agent.writer.add_scalar('Data/reward', np.average(rewards[worker_id]), episode)
                 
-                print("episode: {:<5} worker: {:<2} net worth: {:<7.2f} average: {:<7.2f} orders: {} rewards: {:<5.2f}".format(episode, worker_id, net_worth, average, episode_orders, np.average(rewards[worker_id])*100))
+                print("episode: {:<5} worker: {:<2} net worth: {:<7.2f} average: {:<7.2f} orders: {} rewards: {:<5.2f} diff in return: {:<5.2f}".format(episode, worker_id, net_worth, average, episode_orders, np.average(rewards[worker_id]), diff_in_return))
                 if episode > len(total_average):
                     if best_average < average:
                         best_average = average

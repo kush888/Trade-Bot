@@ -1,0 +1,16 @@
+{
+    "training start": "2022-02-04 02:37",
+    "initial balance": 1000,
+    "training episodes": 200000,
+    "lookback window size": 100,
+    "depth": 13,
+    "lr": 1e-05,
+    "epochs": 5,
+    "batch size": 32,
+    "normalize value": 40000,
+    "model": "CNN",
+    "comment": "Normalized",
+    "saving time": "2022-02-04 05:51",
+    "Actor name": "1126.34_Crypto_trader_Actor.h5",
+    "Critic name": "1126.34_Crypto_trader_Critic.h5"
+}
